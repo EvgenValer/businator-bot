@@ -15,6 +15,7 @@ def init_db():
         con.execute("""CREATE TABLE IF NOT EXISTS beads (
             id INTEGER PRIMARY KEY,
             user_id INTEGER,
+            group_id INTEGER,
             added_at TEXT,
             note TEXT,
             FOREIGN KEY(user_id) REFERENCES users(id)
@@ -34,6 +35,10 @@ def init_db():
             con.execute("ALTER TABLE group_members ADD COLUMN joined_at TEXT")
         except:
             pass
+        try:
+            con.execute("ALTER TABLE beads ADD COLUMN group_id INTEGER")
+        except:
+            pass
 
 def register_user(telegram_id, username, full_name, group_id=None):
     with sqlite3.connect(DB) as con:
@@ -45,14 +50,14 @@ def register_user(telegram_id, username, full_name, group_id=None):
             con.execute("""INSERT OR IGNORE INTO group_members (telegram_id, group_id, joined_at)
                 VALUES (?,?,?)""", (telegram_id, group_id, datetime.now().isoformat()))
 
-def add_beads(telegram_id, count=1):
+def add_beads(telegram_id, count=1, group_id=None):
     with sqlite3.connect(DB) as con:
         row = con.execute("SELECT id FROM users WHERE telegram_id=?", (telegram_id,)).fetchone()
         if not row:
             return False
         for _ in range(count):
-            con.execute("INSERT INTO beads (user_id, added_at) VALUES (?,?)",
-                        (row[0], datetime.now().isoformat()))
+            con.execute("INSERT INTO beads (user_id, group_id, added_at) VALUES (?,?,?)",
+                        (row[0], group_id, datetime.now().isoformat()))
         return True
 
 def get_stats(telegram_id, days=None):
@@ -77,21 +82,21 @@ def get_group_stats(group_id, days=None):
                 FROM users u
                 JOIN group_members gm ON gm.telegram_id = u.telegram_id
                 LEFT JOIN beads b ON u.id = b.user_id
+                    AND b.group_id = ?
                     AND b.added_at >= ?
-                    AND b.added_at >= gm.joined_at
                 WHERE gm.group_id = ?
                 GROUP BY u.id ORDER BY cnt ASC
-            """, (since, group_id)).fetchall()
+            """, (group_id, since, group_id)).fetchall()
         else:
             rows = con.execute("""
                 SELECT COALESCE(u.full_name, u.username), COUNT(b.id) as cnt
                 FROM users u
                 JOIN group_members gm ON gm.telegram_id = u.telegram_id
                 LEFT JOIN beads b ON u.id = b.user_id
-                    AND b.added_at >= gm.joined_at
+                    AND b.group_id = ?
                 WHERE gm.group_id = ?
                 GROUP BY u.id ORDER BY cnt ASC
-            """, (group_id,)).fetchall()
+            """, (group_id, group_id)).fetchall()
         return rows
 
 def get_user_groups(telegram_id):
@@ -112,6 +117,14 @@ def reset_user(telegram_id):
         if not uid:
             return False
         con.execute("DELETE FROM beads WHERE user_id=?", (uid[0],))
+        return True
+
+def reset_user_in_group(telegram_id, group_id):
+    with sqlite3.connect(DB) as con:
+        uid = con.execute("SELECT id FROM users WHERE telegram_id=?", (telegram_id,)).fetchone()
+        if not uid:
+            return False
+        con.execute("DELETE FROM beads WHERE user_id=? AND group_id=?", (uid[0], group_id))
         return True
 
 def leave_group(telegram_id, group_id):

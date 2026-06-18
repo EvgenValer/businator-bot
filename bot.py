@@ -20,8 +20,9 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "/stats — моя статистика\n"
         "/groupall — статистика группы за всё время (только в группе)\n"
         "/groupweek — статистика группы за неделю (только в группе)\n"
+        "/resetgroup — сбросить свою статистику в этой группе (только в группе)\n"
         "/leave — выйти из группы (только в группе)\n"
-        "/reset — сбросить свою статистику (только в личке)"
+        "/reset — сбросить всю статистику (только в личке)"
     )
 
 async def register(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -76,6 +77,7 @@ async def bead(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     chat = update.effective_chat
     count = 1
+    group_id = chat.id if chat.type in ("group", "supergroup") else None
 
     if ctx.args:
         try:
@@ -86,7 +88,7 @@ async def bead(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Укажи целое число: /bead 3")
             return
 
-    ok = db.add_beads(uid, count)
+    ok = db.add_beads(uid, count, group_id)
     if not ok:
         await update.message.reply_text("Сначала зарегистрируйся: /register")
         return
@@ -97,7 +99,7 @@ async def bead(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if chat.type == "private":
         full_name = db.get_user_full_name(uid)
         groups = db.get_user_groups(uid)
-        for group_id in groups:
+        for gid in groups:
             try:
                 if count == 1:
                     text = f"🔴 {full_name} добавил бусинку"
@@ -105,7 +107,7 @@ async def bead(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     text = f"🔴 {full_name} добавил {count} бусинки"
                 else:
                     text = f"🔴 {full_name} добавил {count} бусинок"
-                await ctx.bot.send_message(chat_id=group_id, text=text)
+                await ctx.bot.send_message(chat_id=gid, text=text)
             except:
                 pass
 
@@ -161,10 +163,21 @@ async def groupweek(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if i == 0: icon = "🥇"
         elif i == 1: icon = "🥈"
         elif i == 2: icon = "🥉"
-        elif i == total - 1: icon = "💨"
+        elif i == total - 1: icon = "😐"
         else: icon = "😐"
         text += f"{icon} {name}: {cnt} 🔴\n"
     await update.message.reply_text(text)
+
+async def resetgroup(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type not in ("group", "supergroup"):
+        await update.message.reply_text("Эта команда работает только в группе.")
+        return
+    ok = db.reset_user_in_group(update.effective_user.id, chat.id)
+    if ok:
+        await update.message.reply_text("✅ Твоя статистика в этой группе обнулена.")
+    else:
+        await update.message.reply_text("Ты ещё не зарегистрирован. Напиши /register")
 
 async def leave(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -216,6 +229,7 @@ app.add_handler(CommandHandler("bead", bead))
 app.add_handler(CommandHandler("stats", stats))
 app.add_handler(CommandHandler("groupall", groupall))
 app.add_handler(CommandHandler("groupweek", groupweek))
+app.add_handler(CommandHandler("resetgroup", resetgroup))
 app.add_handler(CommandHandler("leave", leave))
 app.add_handler(CommandHandler("reset", reset))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
