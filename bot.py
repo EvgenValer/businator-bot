@@ -1,10 +1,11 @@
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import database as db
 import pytz
 from datetime import time
 
-TOKEN = "8906121595:AAG64MSI3J6owziOggMK2IqIGYysmpYUV5k"
+TOKEN = os.environ.get("TOKEN")
 
 KHABAROVSK = pytz.timezone("Asia/Vladivostok")
 
