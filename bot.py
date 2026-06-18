@@ -18,7 +18,8 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "/bead — добавить 1 бусинку 🔴\n"
         "/bead 3 — добавить несколько бусинок\n"
         "/stats — моя статистика\n"
-        "/group — статистика группы (только в группе)\n"
+        "/groupall — статистика группы за всё время (только в группе)\n"
+        "/groupweek — статистика группы за неделю (только в группе)\n"
         "/leave — выйти из группы (только в группе)\n"
         "/reset — сбросить свою статистику (только в личке)"
     )
@@ -123,7 +124,7 @@ async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"За всё время: {a} 🔴"
     )
 
-async def group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+async def groupall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if chat.type not in ("group", "supergroup"):
         await update.message.reply_text("Эта команда работает только в группе.")
@@ -132,20 +133,36 @@ async def group(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not rows:
         await update.message.reply_text("В группе пока никто не зарегистрирован.")
         return
-
+    total_beads = sum(cnt for _, cnt in rows)
     total = len(rows)
-    text = "📊 Статистика группы (за всё время):\n\n"
+    text = f"📊 Статистика группы за всё время (всего: {total_beads} 🔴):\n\n"
     for i, (name, cnt) in enumerate(rows):
-        if i == 0:
-            icon = "🥇"
-        elif i == 1:
-            icon = "🥈"
-        elif i == 2:
-            icon = "🥉"
-        elif i == total - 1:
-            icon = "💨"
-        else:
-            icon = "😐"
+        if i == 0: icon = "🥇"
+        elif i == 1: icon = "🥈"
+        elif i == 2: icon = "🥉"
+        elif i == total - 1: icon = "💨"
+        else: icon = "😐"
+        text += f"{icon} {name}: {cnt} 🔴\n"
+    await update.message.reply_text(text)
+
+async def groupweek(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type not in ("group", "supergroup"):
+        await update.message.reply_text("Эта команда работает только в группе.")
+        return
+    rows = db.get_group_stats(chat.id, days=7)
+    if not rows:
+        await update.message.reply_text("В группе пока никто не зарегистрирован.")
+        return
+    total_beads = sum(cnt for _, cnt in rows)
+    total = len(rows)
+    text = f"📊 Статистика группы за неделю (всего: {total_beads} 🔴):\n\n"
+    for i, (name, cnt) in enumerate(rows):
+        if i == 0: icon = "🥇"
+        elif i == 1: icon = "🥈"
+        elif i == 2: icon = "🥉"
+        elif i == total - 1: icon = "💨"
+        else: icon = "😐"
         text += f"{icon} {name}: {cnt} 🔴\n"
     await update.message.reply_text(text)
 
@@ -175,19 +192,15 @@ async def daily_stats(ctx: ContextTypes.DEFAULT_TYPE):
         rows = db.get_group_stats(group_id, days=1)
         if not rows:
             continue
+        total_beads = sum(cnt for _, cnt in rows)
         total = len(rows)
-        text = "📊 Итог дня:\n\n"
+        text = f"📊 Итог дня (всего: {total_beads} 🔴):\n\n"
         for i, (name, cnt) in enumerate(rows):
-            if i == 0:
-                icon = "🥇"
-            elif i == 1:
-                icon = "🥈"
-            elif i == 2:
-                icon = "🥉"
-            elif i == total - 1:
-                icon = "💨"
-            else:
-                icon = "😐"
+            if i == 0: icon = "🥇"
+            elif i == 1: icon = "🥈"
+            elif i == 2: icon = "🥉"
+            elif i == total - 1: icon = "💨"
+            else: icon = "😐"
             text += f"{icon} {name}: {cnt} 🔴\n"
         try:
             await ctx.bot.send_message(chat_id=group_id, text=text)
@@ -201,7 +214,8 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("register", register))
 app.add_handler(CommandHandler("bead", bead))
 app.add_handler(CommandHandler("stats", stats))
-app.add_handler(CommandHandler("group", group))
+app.add_handler(CommandHandler("groupall", groupall))
+app.add_handler(CommandHandler("groupweek", groupweek))
 app.add_handler(CommandHandler("leave", leave))
 app.add_handler(CommandHandler("reset", reset))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

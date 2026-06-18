@@ -23,10 +23,15 @@ def init_db():
             id INTEGER PRIMARY KEY,
             telegram_id INTEGER,
             group_id INTEGER,
+            joined_at TEXT,
             UNIQUE(telegram_id, group_id)
         )""")
         try:
             con.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
+        except:
+            pass
+        try:
+            con.execute("ALTER TABLE group_members ADD COLUMN joined_at TEXT")
         except:
             pass
 
@@ -37,8 +42,8 @@ def register_user(telegram_id, username, full_name, group_id=None):
             ON CONFLICT(telegram_id) DO UPDATE SET full_name=?, username=?""",
             (telegram_id, username, full_name, datetime.now().isoformat(), full_name, username))
         if group_id:
-            con.execute("INSERT OR IGNORE INTO group_members (telegram_id, group_id) VALUES (?,?)",
-                        (telegram_id, group_id))
+            con.execute("""INSERT OR IGNORE INTO group_members (telegram_id, group_id, joined_at)
+                VALUES (?,?,?)""", (telegram_id, group_id, datetime.now().isoformat()))
 
 def add_beads(telegram_id, count=1):
     with sqlite3.connect(DB) as con:
@@ -71,7 +76,9 @@ def get_group_stats(group_id, days=None):
                 SELECT COALESCE(u.full_name, u.username), COUNT(b.id) as cnt
                 FROM users u
                 JOIN group_members gm ON gm.telegram_id = u.telegram_id
-                LEFT JOIN beads b ON u.id = b.user_id AND b.added_at >= ?
+                LEFT JOIN beads b ON u.id = b.user_id
+                    AND b.added_at >= ?
+                    AND b.added_at >= gm.joined_at
                 WHERE gm.group_id = ?
                 GROUP BY u.id ORDER BY cnt ASC
             """, (since, group_id)).fetchall()
@@ -81,6 +88,7 @@ def get_group_stats(group_id, days=None):
                 FROM users u
                 JOIN group_members gm ON gm.telegram_id = u.telegram_id
                 LEFT JOIN beads b ON u.id = b.user_id
+                    AND b.added_at >= gm.joined_at
                 WHERE gm.group_id = ?
                 GROUP BY u.id ORDER BY cnt ASC
             """, (group_id,)).fetchall()
